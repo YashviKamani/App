@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:quote_demo/ui/tablescreen.dart';
+
 class ClientInfoPage extends StatefulWidget {
   @override
   _ClientInfoPageState createState() => _ClientInfoPageState();
@@ -10,17 +10,16 @@ class _ClientInfoPageState extends State<ClientInfoPage> {
   final TextEditingController addressController = TextEditingController();
   final TextEditingController referenceController = TextEditingController();
 
-  void goToQuoteForm() {
+  void goToQuoteForm(BuildContext context) {
     if (nameController.text.isNotEmpty && addressController.text.isNotEmpty) {
-      Navigator.push(
+      Navigator.pushNamed(
         context,
-        MaterialPageRoute(
-          builder: (context) => QuoteFormPage(
-            name: nameController.text,
-            address: addressController.text,
-            reference: referenceController.text,
-          ),
-        ),
+        '/quoteForm',
+        arguments: {
+          'name': nameController.text,
+          'address': addressController.text,
+          'reference': referenceController.text,
+        },
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -40,7 +39,7 @@ class _ClientInfoPageState extends State<ClientInfoPage> {
           children: [
             TextField(
               controller: nameController,
-              decoration: InputDecoration(labelText: 'Client Name'),
+              decoration: InputDecoration(labelText: 'Client name'),
             ),
             TextField(
               controller: addressController,
@@ -48,15 +47,21 @@ class _ClientInfoPageState extends State<ClientInfoPage> {
             ),
             TextField(
               controller: referenceController,
-              decoration: InputDecoration(labelText: 'Reference (Optional)'),
+              decoration: InputDecoration(labelText: 'Reference'),
             ),
             SizedBox(height: 24),
             Center(
               child: ElevatedButton(
-                onPressed: goToQuoteForm,
+                onPressed: () => goToQuoteForm(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueGrey, // 🔵 Button background color
+                  foregroundColor: Colors.white, // ⚪️ Text (and icon) color
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12), // Optional: Adjust size
+                ),
                 child: Text('Continue to Quote'),
               ),
-            ),
+
+              ),
           ],
         ),
       ),

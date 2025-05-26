@@ -1,106 +1,32 @@
-import "package:flutter/material.dart";
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-// import 'package:pdf/widgets.dart' as pw
-
-// import 'package:path_provider/path_provider.dart';
-// import 'package:share_plus/share_plus.dart';
-// import 'dart:io';
-void main() {
-  runApp(QuoteBuilderApp());
-}
-
-class QuoteBuilderApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Product Quote',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: ClientInfoPage(),
-    );
-  }
-}
+import '../Calculation/cal.dart';
 
 final currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
-
-class ClientInfoPage extends StatefulWidget {
-  @override
-  _ClientInfoPageState createState() => _ClientInfoPageState();
-}
-
-class _ClientInfoPageState extends State<ClientInfoPage> {
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController addressController = TextEditingController();
-  final TextEditingController referenceController = TextEditingController();
-
-  void goToQuoteForm() {
-    if (nameController.text.isNotEmpty && addressController.text.isNotEmpty) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => QuoteFormPage(
-            name: nameController.text,
-            address: addressController.text,
-            reference: referenceController.text,
-          ),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please fill in all required fields.')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Client Information')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: InputDecoration(labelText: 'Client name'),
-            ),
-            TextField(
-              controller: addressController,
-              decoration: InputDecoration(labelText: 'Client Address'),
-            ),
-            TextField(
-              controller: referenceController,
-              decoration: InputDecoration(labelText: 'Reference'),
-            ),
-            SizedBox(height: 24),
-            Center(
-              child: ElevatedButton(
-                onPressed: goToQuoteForm,
-                child: Text('Continue to Quote'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class QuoteFormPage extends StatefulWidget {
   final String name;
   final String address;
   final String reference;
 
-  QuoteFormPage({required this.name, required this.address, required this.reference});
+  QuoteFormPage({
+    required this.name,
+    required this.address,
+    required this.reference,
+  });
 
   @override
   _QuoteFormPageState createState() => _QuoteFormPageState();
 }
 
+enum QuoteStatus { Draft, Sent, Accepted }
+
 class _QuoteFormPageState extends State<QuoteFormPage> {
   List<Map<String, dynamic>> items = [
     {'name': '', 'quantity': 0.0, 'rate': 0.0, 'discount': 0.0, 'tax': 0.0},
   ];
+  bool isSending = false;
+  QuoteStatus quoteStatus = QuoteStatus.Draft;
 
   void addItem() {
     setState(() {
@@ -114,18 +40,11 @@ class _QuoteFormPageState extends State<QuoteFormPage> {
     });
   }
 
-  double get totalWithoutTax => items.fold(0.0, (sum, item) {
-    return sum + ((item['rate'] - item['discount']) * item['quantity']);
-  });
-
-  double get totalTax => items.fold(0.0, (sum, item) {
-    double base = (item['rate'] - item['discount']) * item['quantity'];
-    return sum + (base * item['tax'] / 100);
-  });
-
-  double get totalWithTax => totalWithoutTax + totalTax;
-
   void showPreview() {
+    double totalWithoutTax = calculateTotalWithoutTax(items);
+    double totalTax = calculateTotalTax(items);
+    double totalWithTax = calculateTotalWithTax(items);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -139,21 +58,14 @@ class _QuoteFormPageState extends State<QuoteFormPage> {
               if (widget.reference.isNotEmpty) Text('Reference: ${widget.reference}'),
               SizedBox(height: 10),
               ...items.where((item) =>
-    item['name'] != null && item['name'].toString().trim().isNotEmpty &&
-        item['quantity'] != null &&
-        item['rate'] != null &&
-        item['discount'] != null &&
-        item['tax'] != null
-    ).map((item) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Product: ${item['name']}'),
-                    Text('Qty: ${item['quantity']}, Rate: ${currencyFormat.format(item['rate'])}, Discount: ${currencyFormat.format(item['discount'])}, Tax: ${item['tax']}%'),
-                    Divider(),
-                  ],
-                ),
+              item['name'].toString().trim().isNotEmpty).map((item) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Product: ${item['name']}'),
+                  Text('Qty: ${item['quantity']}, Rate: ${currencyFormat.format(item['rate'])}, '
+                      'Discount: ${currencyFormat.format(item['discount'])}, Tax: ${item['tax']}%'),
+                  Divider(),
+                ],
               )),
               Text('---------------------------'),
               Text('Total (without tax): ${currencyFormat.format(totalWithoutTax)}'),
@@ -166,20 +78,40 @@ class _QuoteFormPageState extends State<QuoteFormPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text('Close'),
-          )
+          ),
         ],
       ),
     );
   }
 
+  Future<void> simulateSendQuote() async {
+    setState(() {
+      isSending = true;
+      quoteStatus = QuoteStatus.Sent;
+    });
+    await Future.delayed(Duration(seconds: 3));
+    setState(() => isSending = false);
 
-  void sendPdfViaWhatsapp() {
-        print("Send button clicked.....");
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('📤 Quote marked as Sent!')),
+    );
   }
 
+  void markAsAccepted() {
+    setState(() {
+      quoteStatus = QuoteStatus.Accepted;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('✅ Quote marked as Accepted.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    double totalWithoutTax = calculateTotalWithoutTax(items);
+    double totalTax = calculateTotalTax(items);
+    double totalWithTax = calculateTotalWithTax(items);
+
     return Scaffold(
       appBar: AppBar(title: Text('Quote Form')),
       body: SingleChildScrollView(
@@ -203,59 +135,36 @@ class _QuoteFormPageState extends State<QuoteFormPage> {
               },
               children: [
                 TableRow(
-                  decoration: BoxDecoration(color: Colors.grey[300]),
+                  decoration: BoxDecoration(color: Colors.blueGrey[300]),
                   children: [
-                    Padding(padding: EdgeInsets.all(8), child: Text('Product Name')),
-                    Padding(padding: EdgeInsets.all(8), child: Text('Qty')),
-                    Padding(padding: EdgeInsets.all(8), child: Text('Rate')),
-                    Padding(padding: EdgeInsets.all(8), child: Text('Discount')),
-                    Padding(padding: EdgeInsets.all(8), child: Text('Tax %')),
-                    Padding(padding: EdgeInsets.all(8), child: Text('Remove')),
+                    for (final label in ['Product Name', 'Qty', 'Rate', 'Discount', 'Tax %', 'Remove'])
+                      Padding(
+                        padding: EdgeInsets.all(8),
+                        child: Text(label),
+                      ),
                   ],
                 ),
                 ...items.asMap().entries.map((entry) {
                   int index = entry.key;
                   var item = entry.value;
                   return TableRow(children: [
-                    Padding(
-                      padding: EdgeInsets.all(4),
-                      child: TextField(
-                        onChanged: (val) => setState(() => item['name'] = val),
-                        decoration: InputDecoration(border: InputBorder.none),
+                    for (final key in ['name', 'quantity', 'rate', 'discount', 'tax'])
+                      Padding(
+                        padding: EdgeInsets.all(4),
+                        child: TextField(
+                          onChanged: (val) {
+                            setState(() {
+                              item[key] = key == 'name'
+                                  ? val
+                                  : double.tryParse(val) ?? 0.0;
+                            });
+                          },
+                          keyboardType: key == 'name'
+                              ? TextInputType.text
+                              : TextInputType.number,
+                          decoration: InputDecoration(border: InputBorder.none),
+                        ),
                       ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.all(4),
-                      child: TextField(
-                        onChanged: (val) => setState(() => item['quantity'] = double.tryParse(val) ?? 0.0),
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(border: InputBorder.none),
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.all(4),
-                      child: TextField(
-                        onChanged: (val) => setState(() => item['rate'] = double.tryParse(val) ?? 0.0),
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(border: InputBorder.none),
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.all(4),
-                      child: TextField(
-                        onChanged: (val) => setState(() => item['discount'] = double.tryParse(val) ?? 0.0),
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(border: InputBorder.none),
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.all(4),
-                      child: TextField(
-                        onChanged: (val) => setState(() => item['tax'] = double.tryParse(val) ?? 0.0),
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(border: InputBorder.none),
-                      ),
-                    ),
                     Padding(
                       padding: EdgeInsets.all(4),
                       child: IconButton(
@@ -270,17 +179,42 @@ class _QuoteFormPageState extends State<QuoteFormPage> {
             SizedBox(height: 10),
             ElevatedButton(
               onPressed: addItem,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueGrey, // Button background
+                foregroundColor: Colors.white, // Text color
+              ),
               child: Text('Add Item'),
             ),
-            SizedBox(height: 10),
+
             ElevatedButton(
               onPressed: showPreview,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueGrey,
+                foregroundColor: Colors.white,
+              ),
               child: Text('Preview Quote'),
             ),
-            ElevatedButton(
-              onPressed: sendPdfViaWhatsapp,
-              child: Text('Save'),
+
+            ElevatedButton.icon(
+              icon: Icon(Icons.send),
+              label: isSending ? Text('Sending...') : Text('Send Quote'),
+              onPressed: isSending ? null : simulateSendQuote,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueGrey,
+                foregroundColor: Colors.white,
+              ),
             ),
+
+            ElevatedButton.icon(
+              icon: Icon(Icons.check_circle_outline),
+              label: Text('Mark as Accepted'),
+              onPressed: quoteStatus == QuoteStatus.Sent ? markAsAccepted : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueGrey,
+                foregroundColor: Colors.white,
+              ),
+            ),
+
             Divider(),
             Text('Total (without tax): ${currencyFormat.format(totalWithoutTax)}'),
             Text('Total Tax: ${currencyFormat.format(totalTax)}'),
